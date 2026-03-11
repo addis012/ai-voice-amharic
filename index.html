@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gemini Amharic Voice Test</title>
+  <title>Amharic → English Tutor</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -12,135 +12,358 @@
       background: #f3f3f3;
     }
     h1 {
-      margin-bottom: 16px;
+      margin-bottom: 10px;
     }
-    textarea {
-      width: min(800px, 90vw);
-      height: 180px;
-      padding: 12px;
-      font-size: 18px;
+    p {
+      font-size: 20px;
+      line-height: 1.6;
     }
     button {
-      margin-top: 16px;
-      padding: 12px 24px;
+      padding: 12px 20px;
       font-size: 18px;
+      margin: 8px;
       cursor: pointer;
+      border-radius: 8px;
+      border: 1px solid #999;
     }
-    select {
-      padding: 8px;
-      font-size: 16px;
-      margin-left: 8px;
+    textarea {
+      width: min(850px, 92vw);
+      height: 140px;
+      padding: 12px;
+      font-size: 18px;
+      margin-top: 10px;
+    }
+    #status, #error, #targetBox, #studentBox, #feedbackBox {
+      margin-top: 16px;
+      white-space: pre-wrap;
+    }
+    #error {
+      color: red;
+      font-weight: bold;
     }
     #status {
-      margin-top: 16px;
-      font-size: 18px;
+      color: #333;
+    }
+    #targetBox {
+      color: #0b5;
+      font-weight: bold;
+      font-size: 22px;
+    }
+    #studentBox {
+      color: #222;
+      font-size: 21px;
+    }
+    #feedbackBox {
+      color: #004aad;
+      font-size: 21px;
+      font-weight: bold;
     }
     audio {
-      margin-top: 20px;
-      width: min(700px, 90vw);
+      margin-top: 18px;
+      width: min(800px, 92vw);
     }
-    .row {
-      margin-top: 14px;
+    .small {
+      font-size: 16px;
+      color: #666;
     }
   </style>
 </head>
 <body>
-  <h1>Gemini Amharic Voice Test</h1>
+  <h1>Amharic → English Tutor</h1>
+  <p class="small">Tutor speaks in Amharic, gives one English phrase, then student repeats it with the mic.</p>
 
-  <p>Paste Amharic text and play the real Gemini TTS voice.</p>
+  <textarea id="lessonInput">Create a very short beginner English speaking lesson for an Amharic speaker. Explain briefly in Amharic, then give exactly one English phrase to repeat. Use this JSON format only:
+{"amharic":"...","target":"..."}</textarea>
 
-  <textarea id="textInput">ሰላም! እንግሊዝኛ መማር በጣም ደስ ይላል። ዛሬ “How are you?” የሚለውን እንማራለን።</textarea>
-
-  <div class="row">
-    Voice:
-    <select id="voiceSelect">
-      <option value="Kore">Kore</option>
-      <option value="Puck">Puck</option>
-      <option value="Zephyr">Zephyr</option>
-      <option value="Aoede">Aoede</option>
-      <option value="Schedar">Schedar</option>
-    </select>
-  </div>
-
-  <div class="row">
-    <button id="playBtn">Generate Gemini Voice</button>
+  <div>
+    <button id="startLessonBtn">▶ Start Lesson</button>
+    <button id="replyBtn">🎤 Student Reply</button>
   </div>
 
   <div id="status"></div>
+  <div id="error"></div>
+
+  <div id="targetBox"></div>
+  <div id="studentBox"></div>
+  <div id="feedbackBox"></div>
+
   <audio id="player" controls></audio>
 
   <script>
-    // TEST ONLY. Rotate/delete this key after testing.
-    const API_KEY = "AIzaSyBFR_YI8gQE6uU-O3b2GlP_8wiY";
+    // TEST ONLY - rotate/delete after testing
+    const API_KEY = "AIzaSyBFxmlDfrlR_YI8gQE6uU-O3b2GlP_8wiY";
 
-    const textInput = document.getElementById("textInput");
-    const voiceSelect = document.getElementById("voiceSelect");
-    const playBtn = document.getElementById("playBtn");
+    const startLessonBtn = document.getElementById("startLessonBtn");
+    const replyBtn = document.getElementById("replyBtn");
+    const lessonInput = document.getElementById("lessonInput");
     const statusEl = document.getElementById("status");
+    const errorEl = document.getElementById("error");
+    const targetBox = document.getElementById("targetBox");
+    const studentBox = document.getElementById("studentBox");
+    const feedbackBox = document.getElementById("feedbackBox");
     const player = document.getElementById("player");
 
-    playBtn.addEventListener("click", generateVoice);
+    let currentTarget = "";
+    let currentAmharicTutorText = "";
 
-    async function generateVoice() {
-      const text = textInput.value.trim();
-      const voice = voiceSelect.value;
+    startLessonBtn.addEventListener("click", startLesson);
+    replyBtn.addEventListener("click", captureStudentReply);
 
-      if (!text) {
-        statusEl.textContent = "Please enter some text.";
+    async function startLesson() {
+      clearMessages();
+      statusEl.textContent = "Creating lesson...";
+
+      try {
+        const prompt = lessonInput.value.trim();
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: prompt
+                    }
+                  ]
+                }
+              ]
+            })
+          }
+        );
+
+        const data = await response.json();
+        console.log("Lesson response:", data);
+
+        if (!response.ok) {
+          errorEl.textContent = "API Error: " + (data.error?.message || "Unknown error");
+          statusEl.textContent = "";
+          return;
+        }
+
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const parsed = extractLessonJson(rawText);
+
+        if (!parsed || !parsed.amharic || !parsed.target) {
+          errorEl.textContent = "Could not read lesson JSON. Try again.";
+          statusEl.textContent = "";
+          return;
+        }
+
+        currentAmharicTutorText = parsed.amharic.trim();
+        currentTarget = parsed.target.trim();
+
+        targetBox.textContent = `Target phrase: ${currentTarget}`;
+        feedbackBox.textContent = "";
+        studentBox.textContent = "";
+
+        const speechText =
+          `${currentAmharicTutorText}\n\nበል: ${currentTarget}\n\nማይኩን ተጭነክ ${currentTarget} በል።`;
+
+        await generateGeminiVoice(speechText);
+        statusEl.textContent = "Lesson ready. Now press Student Reply and say the phrase.";
+      } catch (err) {
+        console.error(err);
+        errorEl.textContent = "Request failed: " + err.message;
+        statusEl.textContent = "";
+      }
+    }
+
+    async function captureStudentReply() {
+      errorEl.textContent = "";
+      feedbackBox.textContent = "";
+
+      if (!currentTarget) {
+        errorEl.textContent = "Start a lesson first.";
         return;
       }
 
-      statusEl.textContent = "Generating Gemini audio...";
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (!SpeechRecognition) {
+        errorEl.textContent = "Speech recognition is not supported in this browser.";
+        return;
+      }
+
+      statusEl.textContent = `Listening... Please say: ${currentTarget}`;
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = async function(event) {
+        const spoken = event.results[0][0].transcript.trim();
+        studentBox.textContent = `Student said: ${spoken}`;
+
+        const matched = isCloseEnough(currentTarget, spoken);
+
+        if (matched) {
+          feedbackBox.textContent = "Very good!";
+          statusEl.textContent = "Correct answer.";
+          await generateGeminiVoice(`በጣም ጥሩ! ልክ ነው። You said: ${currentTarget}.`);
+        } else {
+          statusEl.textContent = "Not exact enough. Asking Gemini to correct.";
+
+          const correctionPrompt = `
+You are an English tutor for Amharic speakers.
+
+Student was asked to say this exact English phrase:
+"${currentTarget}"
+
+Student actually said:
+"${spoken}"
+
+Respond in very simple Amharic.
+Rules:
+- First encourage kindly.
+- Then say whether it is correct or not.
+- If not correct, tell the student to say the exact phrase again.
+- Keep it very short.
+- End by repeating the target phrase exactly once.
+- Return plain text only.
+`;
+
+          try {
+            const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  contents: [
+                    {
+                      parts: [
+                        { text: correctionPrompt }
+                      ]
+                    }
+                  ]
+                })
+              }
+            );
+
+            const data = await response.json();
+            console.log("Correction response:", data);
+
+            if (!response.ok) {
+              errorEl.textContent = "API Error: " + (data.error?.message || "Unknown error");
+              statusEl.textContent = "";
+              return;
+            }
+
+            const feedback =
+              data.candidates?.[0]?.content?.parts?.[0]?.text ||
+              `እንደገና ሞክር። በል: ${currentTarget}`;
+
+            feedbackBox.textContent = feedback;
+            await generateGeminiVoice(feedback);
+            statusEl.textContent = "Feedback ready. Try again.";
+          } catch (err) {
+            console.error(err);
+            errorEl.textContent = "Correction failed: " + err.message;
+            statusEl.textContent = "";
+          }
+        }
+      };
+
+      recognition.onerror = function(event) {
+        errorEl.textContent = "Speech error: " + event.error;
+        statusEl.textContent = "";
+      };
+
+      recognition.start();
+    }
+
+    function normalizeText(text) {
+      return text
+        .toLowerCase()
+        .replace(/[^\w\s]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function isCloseEnough(target, spoken) {
+      const a = normalizeText(target);
+      const b = normalizeText(spoken);
+
+      if (a === b) return true;
+
+      const aWords = a.split(" ");
+      const bWords = b.split(" ");
+
+      if (aWords.length !== bWords.length) return false;
+
+      let sameCount = 0;
+      for (let i = 0; i < aWords.length; i++) {
+        if (aWords[i] === bWords[i]) sameCount++;
+      }
+
+      return sameCount >= Math.max(1, aWords.length - 1);
+    }
+
+    function extractLessonJson(text) {
+      try {
+        const cleaned = text.trim();
+        const firstBrace = cleaned.indexOf("{");
+        const lastBrace = cleaned.lastIndexOf("}");
+        if (firstBrace === -1 || lastBrace === -1) return null;
+        return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+      } catch {
+        return null;
+      }
+    }
+
+    async function generateGeminiVoice(text) {
+      statusEl.textContent = "Generating Gemini voice...";
+
       player.removeAttribute("src");
       player.load();
 
-      try {
-        const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": API_KEY
-          },
-          body: JSON.stringify({
-            model: "gemini-2.5-flash-preview-tts",
-            input: text,
-            response_modalities: ["AUDIO"],
-            generation_config: {
-              speech_config: {
-                language: "am-ET",
-                voice: voice
-              }
+      const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": API_KEY
+        },
+        body: JSON.stringify({
+          model: "gemini-2.5-flash-preview-tts",
+          input: text,
+          response_modalities: ["AUDIO"],
+          generation_config: {
+            speech_config: {
+              language: "am-ET",
+              voice: "Kore"
             }
-          })
-        });
+          }
+        })
+      });
 
-        const data = await response.json();
-        console.log("Gemini TTS response:", data);
+      const data = await response.json();
+      console.log("TTS response:", data);
 
-        if (!response.ok) {
-          statusEl.textContent = "API Error: " + (data.error?.message || "Unknown error");
-          return;
-        }
-
-        const audioOutput = data.outputs?.find(o => o.type === "audio");
-        if (!audioOutput?.data) {
-          statusEl.textContent = "No audio returned.";
-          return;
-        }
-
-        // TTS response audio is PCM. Wrap it into a WAV container for browser playback.
-        const pcmBytes = base64ToUint8Array(audioOutput.data);
-        const wavBytes = pcmToWav(pcmBytes, 24000, 1, 16);
-        const blob = new Blob([wavBytes], { type: "audio/wav" });
-        const url = URL.createObjectURL(blob);
-
-        player.src = url;
-        player.play().catch(() => {});
-        statusEl.textContent = "Done. Playing Gemini voice.";
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = "Request failed: " + err.message;
+      if (!response.ok) {
+        throw new Error(data.error?.message || "TTS request failed");
       }
+
+      const audioOutput = data.outputs?.find(o => o.type === "audio");
+      if (!audioOutput?.data) {
+        throw new Error("No audio returned");
+      }
+
+      const pcmBytes = base64ToUint8Array(audioOutput.data);
+      const wavBytes = pcmToWav(pcmBytes, 24000, 1, 16);
+      const blob = new Blob([wavBytes], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+
+      player.src = url;
+      await player.play().catch(() => {});
     }
 
     function base64ToUint8Array(base64) {
@@ -163,8 +386,8 @@
       view.setUint32(4, 36 + dataSize, true);
       writeString(view, 8, "WAVE");
       writeString(view, 12, "fmt ");
-      view.setUint32(16, 16, true); // PCM chunk size
-      view.setUint16(20, 1, true);  // audio format PCM
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
       view.setUint16(22, channels, true);
       view.setUint32(24, sampleRate, true);
       view.setUint32(28, byteRate, true);
@@ -181,6 +404,14 @@
       for (let i = 0; i < str.length; i++) {
         view.setUint8(offset + i, str.charCodeAt(i));
       }
+    }
+
+    function clearMessages() {
+      errorEl.textContent = "";
+      statusEl.textContent = "";
+      targetBox.textContent = "";
+      studentBox.textContent = "";
+      feedbackBox.textContent = "";
     }
   </script>
 </body>
