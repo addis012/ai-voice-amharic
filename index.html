@@ -72,8 +72,16 @@
   <h1>Amharic → English Tutor</h1>
   <p class="small">Tutor speaks in Amharic, gives one English phrase, then student repeats it with the mic.</p>
 
-  <textarea id="lessonInput">Create a very short beginner English speaking lesson for an Amharic speaker. Explain briefly in Amharic, then give exactly one English phrase to repeat. Use this JSON format only:
-{"amharic":"...","target":"..."}</textarea>
+  <textarea id="lessonInput">Create a very short beginner English speaking lesson for an Amharic speaker. Return JSON only in this exact format:
+{"amharic":"short Amharic explanation only","target":"one short English phrase only"}
+
+Rules:
+- "amharic" must be only Amharic text, short and natural.
+- "target" must be only one short English phrase.
+- Keep the Amharic explanation short.
+- Do not put English words inside "amharic".
+- Do not add markdown.
+- Output JSON only.</textarea>
 
   <div>
     <button id="startLessonBtn">▶ Start Lesson</button>
@@ -162,11 +170,11 @@
         feedbackBox.textContent = "";
         studentBox.textContent = "";
 
-        const speechText =
-          `${currentAmharicTutorText}\n\nበል: ${currentTarget}\n\nማይኩን ተጭነክ ${currentTarget} በል።`;
+        // Keep Gemini TTS input mostly short Amharic only
+        const speechText = `${currentAmharicTutorText} አሁን የታች ያለውን እንግሊዝኛ ተናገር።`;
 
         await generateGeminiVoice(speechText);
-        statusEl.textContent = "Lesson ready. Now press Student Reply and say the phrase.";
+        statusEl.textContent = "Lesson ready. Press Student Reply and say the target phrase.";
       } catch (err) {
         console.error(err);
         errorEl.textContent = "Request failed: " + err.message;
@@ -204,9 +212,9 @@
         const matched = isCloseEnough(currentTarget, spoken);
 
         if (matched) {
-          feedbackBox.textContent = "Very good!";
+          feedbackBox.textContent = "በጣም ጥሩ!";
           statusEl.textContent = "Correct answer.";
-          await generateGeminiVoice(`በጣም ጥሩ! ልክ ነው። You said: ${currentTarget}.`);
+          await generateGeminiVoice("በጣም ጥሩ! ልክ ነው።");
         } else {
           statusEl.textContent = "Not exact enough. Asking Gemini to correct.";
 
@@ -219,13 +227,15 @@ Student was asked to say this exact English phrase:
 Student actually said:
 "${spoken}"
 
-Respond in very simple Amharic.
+Respond in Amharic only.
+
 Rules:
-- First encourage kindly.
+- First encourage kindly in Amharic.
 - Then say whether it is correct or not.
-- If not correct, tell the student to say the exact phrase again.
+- If not correct, tell the student in Amharic to try again.
 - Keep it very short.
-- End by repeating the target phrase exactly once.
+- Do not use English explanations.
+- Do not use markdown.
 - Return plain text only.
 `;
 
@@ -260,7 +270,7 @@ Rules:
 
             const feedback =
               data.candidates?.[0]?.content?.parts?.[0]?.text ||
-              `እንደገና ሞክር። በል: ${currentTarget}`;
+              "እንደገና ሞክር።";
 
             feedbackBox.textContent = feedback;
             await generateGeminiVoice(feedback);
@@ -334,7 +344,7 @@ Rules:
         },
         body: JSON.stringify({
           model: "gemini-2.5-flash-preview-tts",
-          input: text,
+          input: `Speak naturally in Amharic with a friendly teacher tone. Say only this text: ${text}`,
           response_modalities: ["AUDIO"],
           generation_config: {
             speech_config: {
